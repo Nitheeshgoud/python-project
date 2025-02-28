@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest test/ # Add tests if you have any
+          python -m pytest test/
 
       - name: Package application
         run: |
