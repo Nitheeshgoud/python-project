@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest test/
+          python -m pytest test-main.py
 
       - name: Package application
         run: |
