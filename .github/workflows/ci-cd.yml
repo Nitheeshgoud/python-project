@@ -3,10 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -28,36 +28,42 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest 
+          python -m pytest  # Add tests if you have any
 
       - name: Package application
         run: |
           zip -r application.zip . -x '*.git*' '*.github*' 'venv/*' '*.env*'
 
       - name: Upload artifact to S3
-        uses: aws-actions/upload-s3@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: build-artifact
           path: application.zip
-          bucket: demo-artifact  # Replace with your S3 bucket name
-          key: application-${{ github.sha }}.zip
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
-          role-to-assume: arn:aws:iam::120569639058:role/code-deploy
-          aws-region: ap-south-1
+          name: build-artifact
+          path: build/
 
-      - name: Deploy to AWS CodeDeploy
+      - name: Deploy via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
         run: |
-          aws deploy create-deployment \
-            --application-name python-application \
-            --deployment-group-name python-application-group \
-            --s3-location bucket=demo-artifact,bundleType=zip,key=application-${{ github.sha }}.zip
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          scp -i ~/.ssh/id_rsa -P ${{ secrets.SSH_PORT }} build/application.zip ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/azureuser/nitheesh
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd /home/azureuser/nitheesh
+            unzip -o application.zip
+          EOF
